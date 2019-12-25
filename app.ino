@@ -1,11 +1,6 @@
-// TODO: How to properly keep track of time, what is actually going on with that
-//       How to properly do HTTPS requests to firebase
-//       How to do deep sleep
-
-
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include "time.h" // TODO: what is the diff between quotes and brackets here.
+#include "time.h"
 #include <string>
 #include <sstream>
 
@@ -21,7 +16,6 @@ const int WAKEUP_INTERVAL_S = 10;
 
 HTTPClient client;
 
-// TODO: More efficient and natural way to to do this. Am I using C++ or C?
 std::string getMacAddress()
 {
   std::stringstream ss;
@@ -32,12 +26,9 @@ std::string getMacAddress()
 
 std::string responsePayloadCreation(const std::string& type)
 {
-  // TODO: Will this time always be right or will it drift with sleep and what not?
-  // TODO: Do I have to recalibrate it?
   time_t now = time(nullptr);
   Serial.println(now);
 
-  // TODO: Could possibly create a nice class for this.
   std::stringstream ss;
   ss << "{\"timestamp\":\"" << now << "\",";
   ss << "\"type\":\"" << type << "\",";
@@ -46,7 +37,6 @@ std::string responsePayloadCreation(const std::string& type)
   return ss.str();
 }
 
-// TODO: Consider IRAM_ATTR
 volatile int transitSelectedCount = 0;
 void IRAM_ATTR TransitButtonSelectedInterrupt()
 {
@@ -58,7 +48,7 @@ void setup()
 {
   Serial.begin(115200);
   pinMode(TRANSIT_BUTTON_PIN, INPUT);
-  pinMode(TRANSIT_LED_PIN, OUTPUT); // TODO: what resistor to use for this LED?
+  pinMode(TRANSIT_LED_PIN, OUTPUT);
 
   Serial.print("Connecting to network");
   delay(4000);
@@ -77,25 +67,19 @@ void setup()
   attachInterrupt(TRANSIT_BUTTON_PIN, TransitButtonSelectedInterrupt, RISING);
 }
 
-// TODO: This should be replaced with an actual sleep
 void loop()
 {
   if (transitSelectedCount > BUFFER_SIZE)
   {
     for (int i = 0; i < BUFFER_SIZE; i++)
     {
-      transitSelectedCount--; // TODO: Figure out a better way to make this atomic. Also "debounce" input presses to help with this.
-
-      // TODO: For sending back data, we want the time to be very accurate to do better analysis. So perhaps we should batch the responses
-      // in some way, however, this can be tabled for now after the initial prototype. Perhaps that is too much robustness at this moment.
+      transitSelectedCount--;
 
       digitalWrite(TRANSIT_LED_PIN, HIGH);
 
       client.begin("https://surveybox-fe69c.firebaseio.com/responses.json");
       client.addHeader("Content-Type", "application/json");
       int code = client.POST(responsePayloadCreation("transit").c_str());
-
-      // TODO: Response logging.
 
       client.end();
 
