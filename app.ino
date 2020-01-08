@@ -123,14 +123,16 @@ void setup()
   pinMode(CAR_BUTTON_PIN, INPUT_PULLDOWN);
   pinMode(CAR_LED_PIN, OUTPUT);
 
+  // Note that WiFi#begin inside of loop is a workaround for issues with connecting to AP
+  // after reset and some boots.
   Serial.print("Connecting to network");
-  delay(4000);
-  WiFi.begin(SSID, PASSWORD);
   while (WiFi.status() != WL_CONNECTED)
   {
+    WiFi.begin(SSID, PASSWORD);
     delay(500);
     Serial.print(".");
   }
+
   Serial.println();
   Serial.println("Now connected.");
   Serial.print("IP Address: ");
