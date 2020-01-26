@@ -2,8 +2,10 @@
 #include <sstream>
 #include <list>
 #include <WiFi.h>
+#include <WebServer.h>
 #include <HTTPClient.h>
 #include <time.h>
+#include <AutoConnect.h>
 
 #include "firebase_client.hpp"
 #include "event.hpp"
@@ -23,12 +25,16 @@ const int WHEELS_LED_PIN = 26;
 const int TRANSIT_LED_PIN = 27;
 const int CAR_LED_PIN = 14;
 
+const int LED_SELECTION_DURATION_MS = 3000;
 const int THROTTLE_INTERVAL_LENGTH = 0;
-const int DEBOUNCE_INTERVAL = 250;
+const int DEBOUNCE_INTERVAL = 500;
 
 const char* NTP_SERVER = "pool.ntp.org";
 
-std::list<Event> my_events;
+WebServer server;
+AutoConnect portal(server);
+
+std::list<Event> events;
 
 std::string get_mac_address()
 {
@@ -36,6 +42,17 @@ std::string get_mac_address()
   ss << std::hex << ESP.getEfuseMac();
 
   return ss.str();
+}
+
+// Method to display certain led patterns
+void display_led_pattern(const std::vector<int>& pattern, unsigned int display_time_ms)
+{
+  for (auto const& item : pattern)
+  {
+    digitalWrite(item, HIGH);
+    delay(display_time_ms);
+    digitalWrite(item, LOW);
+  }
 }
 
 volatile bool walk_button_pressed = false;
@@ -52,7 +69,7 @@ void IRAM_ATTR walk_button_pressed_interrupt()
 
   // TODO: This may not be fast enough
   time_t now = time(nullptr);
-  my_events.push_front(Event("walk", now));
+  events.push_front(Event("walk", now));
 }
 
 volatile bool wheels_button_pressed = false;
@@ -69,7 +86,7 @@ void IRAM_ATTR wheels_button_pressed_interrupt()
 
   // TODO: This may not be fast enough
   time_t now = time(nullptr);
-  my_events.push_front(Event("wheels", now));
+  events.push_front(Event("wheels", now));
 }
 
 volatile bool transit_button_pressed = false;
@@ -86,7 +103,7 @@ void IRAM_ATTR transit_button_pressed_interrupt()
 
   // TODO: This may not be fast enough
   time_t now = time(nullptr);
-  my_events.push_front(Event("transit", now));
+  events.push_front(Event("transit", now));
 }
 
 volatile bool car_button_pressed = false;
@@ -103,14 +120,17 @@ void IRAM_ATTR car_button_pressed_interrupt()
 
   // TODO: This may not be fast enough
   time_t now = time(nullptr);
-  my_events.push_front(Event("car", now));
+  events.push_front(Event("car", now));
 }
 
-FirebaseClient client("surveybox-fe69c", "events", get_mac_address());
+FirebaseClient client("surveybox-fe69c", "events-test", get_mac_address());
 
 void setup()
 {
   Serial.begin(115200);
+  delay(1000);
+
+  Serial.println("Here at the beginning.");
   pinMode(WALK_BUTTON_PIN, INPUT_PULLDOWN);
   pinMode(WALK_LED_PIN, OUTPUT);
 
@@ -123,21 +143,37 @@ void setup()
   pinMode(CAR_BUTTON_PIN, INPUT_PULLDOWN);
   pinMode(CAR_LED_PIN, OUTPUT);
 
+
+
   // Note that WiFi#begin inside of loop is a workaround for issues with connecting to AP
   // after reset and some boots.
+  /*
   Serial.print("Connecting to network");
+  WiFi.begin(SSID, PASSWORD);
   while (WiFi.status() != WL_CONNECTED)
   {
-    WiFi.begin(SSID, PASSWORD);
-    delay(500);
-    Serial.print(".");
+    digitalWrite(WALK_LED_PIN, HIGH);
+    delay(1000);
+    digitalWrite(WALK_LED_PIN, LOW);
   }
+  */
+  Serial.println("Starting portal...");
+
+  bool success = portal.begin();
+  if (!success)
+  {
+    Serial.println("Not successfully connected");
+  }
+
+  // TODO: Should this exist with the website portal as well?
+  std::vector<int> wifi_connected_pattern = { WALK_LED_PIN, WHEELS_LED_PIN, TRANSIT_LED_PIN, CAR_LED_PIN };
+  display_led_pattern(wifi_connected_pattern, 2000);
 
   Serial.println();
   Serial.println("Now connected.");
   Serial.print("IP Address: ");
   Serial.println(WiFi.localIP());
-  configTime(0, 0, NTP_SERVER);
+  //configTime(0, 0, NTP_SERVER);
 
   attachInterrupt(WALK_BUTTON_PIN, walk_button_pressed_interrupt, RISING);
   attachInterrupt(WHEELS_BUTTON_PIN, wheels_button_pressed_interrupt, RISING);
@@ -151,8 +187,11 @@ unsigned long transit_led_start_timestamp = 0;
 unsigned long car_led_start_timestamp = 0;
 
 bool to_be_emptied = false;
+
 void loop()
 {
+  portal.handleClient();
+
   // Pedestrian button logic
   if (walk_button_pressed)
   {
@@ -161,7 +200,7 @@ void loop()
     walk_button_pressed = false;
   }
 
-  if (walk_led_start_timestamp > 0 && millis() - walk_led_start_timestamp >= 5000)
+  if (walk_led_start_timestamp > 0 && millis() - walk_led_start_timestamp >= LED_SELECTION_DURATION_MS)
   {
     digitalWrite(WALK_LED_PIN, LOW);
     walk_led_start_timestamp = 0;
@@ -175,7 +214,7 @@ void loop()
     wheels_button_pressed = false;
   }
 
-  if (wheels_led_start_timestamp > 0 && millis() - wheels_led_start_timestamp >= 5000)
+  if (wheels_led_start_timestamp > 0 && millis() - wheels_led_start_timestamp >= LED_SELECTION_DURATION_MS)
   {
     digitalWrite(WHEELS_LED_PIN, LOW);
     wheels_led_start_timestamp = 0;
@@ -189,7 +228,7 @@ void loop()
     transit_button_pressed = false;
   }
 
-  if (transit_led_start_timestamp > 0 && millis() - transit_led_start_timestamp >= 5000)
+  if (transit_led_start_timestamp > 0 && millis() - transit_led_start_timestamp >= LED_SELECTION_DURATION_MS)
   {
     digitalWrite(TRANSIT_LED_PIN, LOW);
     transit_led_start_timestamp = 0;
@@ -203,24 +242,24 @@ void loop()
     car_button_pressed = false;
   }
 
-  if (car_led_start_timestamp > 0 && millis() - car_led_start_timestamp >= 5000)
+  if (car_led_start_timestamp > 0 && millis() - car_led_start_timestamp >= LED_SELECTION_DURATION_MS)
   {
     digitalWrite(CAR_LED_PIN, LOW);
     car_led_start_timestamp = 0;
   }
 
-  if (!to_be_emptied && my_events.size() > THROTTLE_INTERVAL_LENGTH)
+  if (!to_be_emptied && events.size() > THROTTLE_INTERVAL_LENGTH)
   {
     to_be_emptied = true;
   }
 
   if (to_be_emptied)
   {
-    client.add(my_events.front());
-    my_events.pop_front();
+    client.add(events.front());
+    events.pop_front();
 
     // TODO: branching efficiency
-    if (my_events.empty())
+    if (events.empty())
     {
       to_be_emptied = false;
     }
