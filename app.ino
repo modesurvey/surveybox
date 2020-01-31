@@ -10,9 +10,6 @@
 #include "firebase_client.hpp"
 #include "event.hpp"
 
-const char* SSID = "MYNETWORK";
-const char* PASSWORD = "MYPASSWORD";
-
 // TODO: Going to add all the board logic in this file. Apart from some crazy DSL, I don't see a very general way to do this and keep sane.
 // TODO: This has to actually be specified properly.
 const int WALK_BUTTON_PIN = 23;
@@ -25,9 +22,9 @@ const int WHEELS_LED_PIN = 26;
 const int TRANSIT_LED_PIN = 27;
 const int CAR_LED_PIN = 14;
 
-const int LED_SELECTION_DURATION_MS = 3000;
+const int LED_SELECTION_DURATION_MS = 2000;
 const int THROTTLE_INTERVAL_LENGTH = 0;
-const int DEBOUNCE_INTERVAL = 500;
+const int DEBOUNCE_INTERVAL = 150;
 
 const char* NTP_SERVER = "pool.ntp.org";
 
@@ -44,6 +41,18 @@ std::string get_mac_address()
   return ss.str();
 }
 
+// TODO: This is quick and dirty for now. This should be replaced with a web based interface. This is also more extensible
+// for more automation in the future. Full story still to be fleshed out.
+bool buttons_match_production_key(const std::vector<int>& buttons)
+{
+  return buttons.size() >= 5 &&
+    buttons[buttons.size() - 1] == 1 &&
+    buttons[buttons.size() - 2] == 4 &&
+    buttons[buttons.size() - 3] == 2 &&
+    buttons[buttons.size() - 4] == 3 &&
+    buttons[buttons.size() - 5] == 1;
+}
+
 // Method to display certain led patterns
 void display_led_pattern(const std::vector<int>& pattern, unsigned int display_time_ms)
 {
@@ -57,14 +66,14 @@ void display_led_pattern(const std::vector<int>& pattern, unsigned int display_t
 
 volatile bool walk_button_pressed = false;
 volatile unsigned long walk_interrupt_timestamp = 0;
-void IRAM_ATTR walk_button_pressed_interrupt()
+void IRAM_ATTR walk_button_change_interrupt()
 {
   if (millis() - walk_interrupt_timestamp < DEBOUNCE_INTERVAL)
   {
     return;
   }
   walk_interrupt_timestamp = millis();
-  
+
   walk_button_pressed = true;
 
   // TODO: This may not be fast enough
@@ -124,6 +133,7 @@ void IRAM_ATTR car_button_pressed_interrupt()
 }
 
 FirebaseClient client("surveybox-fe69c", "events-test", get_mac_address());
+std::vector<int> wifi_connected_pattern = { WALK_LED_PIN, WHEELS_LED_PIN, TRANSIT_LED_PIN, CAR_LED_PIN };
 
 void setup()
 {
@@ -143,21 +153,9 @@ void setup()
   pinMode(CAR_BUTTON_PIN, INPUT_PULLDOWN);
   pinMode(CAR_LED_PIN, OUTPUT);
 
-
-
-  // Note that WiFi#begin inside of loop is a workaround for issues with connecting to AP
-  // after reset and some boots.
-  /*
-  Serial.print("Connecting to network");
-  WiFi.begin(SSID, PASSWORD);
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    digitalWrite(WALK_LED_PIN, HIGH);
-    delay(1000);
-    digitalWrite(WALK_LED_PIN, LOW);
-  }
-  */
   Serial.println("Starting portal...");
+
+  display_led_pattern(wifi_connected_pattern, 2000);
 
   bool success = portal.begin();
   if (!success)
@@ -165,17 +163,15 @@ void setup()
     Serial.println("Not successfully connected");
   }
 
-  // TODO: Should this exist with the website portal as well?
-  std::vector<int> wifi_connected_pattern = { WALK_LED_PIN, WHEELS_LED_PIN, TRANSIT_LED_PIN, CAR_LED_PIN };
   display_led_pattern(wifi_connected_pattern, 2000);
 
   Serial.println();
   Serial.println("Now connected.");
   Serial.print("IP Address: ");
   Serial.println(WiFi.localIP());
-  //configTime(0, 0, NTP_SERVER);
+  configTime(0, 0, NTP_SERVER);
 
-  attachInterrupt(WALK_BUTTON_PIN, walk_button_pressed_interrupt, RISING);
+  attachInterrupt(WALK_BUTTON_PIN, walk_button_change_interrupt, RISING);
   attachInterrupt(WHEELS_BUTTON_PIN, wheels_button_pressed_interrupt, RISING);
   attachInterrupt(TRANSIT_BUTTON_PIN, transit_button_pressed_interrupt, RISING);
   attachInterrupt(CAR_BUTTON_PIN, car_button_pressed_interrupt, RISING);
@@ -187,14 +183,26 @@ unsigned long transit_led_start_timestamp = 0;
 unsigned long car_led_start_timestamp = 0;
 
 bool to_be_emptied = false;
+bool prod_switch_complete = false;
+bool walk_button_pressed_cache = false;
+std::vector<int> last_buttons;
 
 void loop()
 {
   portal.handleClient();
+  // TODO: this will technically work in 95% of cases at the moment, but it can fail in very edge cases, and ideally this will be cleaner and
+  // easier to understand.
+  if (!prod_switch_complete && buttons_match_production_key(last_buttons))
+  {
+    display_led_pattern(wifi_connected_pattern, 2000);
+    client = FirebaseClient("surveybox-fe69c", "events", get_mac_address());
+    prod_switch_complete = true;
+  }
 
   // Pedestrian button logic
   if (walk_button_pressed)
   {
+    last_buttons.push_back(1);
     digitalWrite(WALK_LED_PIN, HIGH);
     walk_led_start_timestamp = millis();
     walk_button_pressed = false;
@@ -209,6 +217,7 @@ void loop()
   // Wheels button logic
   if (wheels_button_pressed)
   {
+    last_buttons.push_back(2);
     digitalWrite(WHEELS_LED_PIN, HIGH);
     wheels_led_start_timestamp = millis();
     wheels_button_pressed = false;
@@ -223,6 +232,7 @@ void loop()
   // TRANSIT button logic.
   if (transit_button_pressed)
   {
+    last_buttons.push_back(3);
     digitalWrite(TRANSIT_LED_PIN, HIGH);
     transit_led_start_timestamp = millis();
     transit_button_pressed = false;
@@ -237,6 +247,7 @@ void loop()
   // Car button logic
   if (car_button_pressed)
   {
+    last_buttons.push_back(4);
     digitalWrite(CAR_LED_PIN, HIGH);
     car_led_start_timestamp = millis();
     car_button_pressed = false;
@@ -255,13 +266,16 @@ void loop()
 
   if (to_be_emptied)
   {
-    client.add(events.front());
-    events.pop_front();
-
-    // TODO: branching efficiency
-    if (events.empty())
+    bool added_event = client.add(events.back());
+    if (added_event)
     {
-      to_be_emptied = false;
+      events.pop_back(); // TODO: using the same buffer here and in interrupts means that there is a risk of thread overlap
+
+      // TODO: branching efficiency
+      if (events.empty())
+      {
+        to_be_emptied = false;
+      }
     }
   }
 }

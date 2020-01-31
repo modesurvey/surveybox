@@ -9,6 +9,12 @@ FirebaseClient::FirebaseClient(const std::string& endpoint, const std::string& p
     _url = ss.str();
 }
 
+FirebaseClient& FirebaseClient::operator=(const FirebaseClient& client)
+{
+  _url = client._url;
+  _deviceid = _deviceid;
+}
+
 bool FirebaseClient::add(const Event& event)
 {
     _client.begin(_url.c_str());

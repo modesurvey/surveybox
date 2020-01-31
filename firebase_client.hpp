@@ -20,5 +20,7 @@ class FirebaseClient
         // Can create base and then esp32 variant of this code.
         FirebaseClient(const std::string& endpoint, const std::string& path, const std::string& deviceid);
 
+        FirebaseClient& operator= (const FirebaseClient& client);
+
         bool add(const Event& event);
 };
