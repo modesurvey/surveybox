@@ -1,6 +1,6 @@
 ### SurveyBox
 
-SurveyBox is the on-the-ground data collection device used by (ModeSurvey)[https://modesurvey.org]. This repo contains the information, source, and instructions for SurveyBox.
+SurveyBox is the on-the-ground data collection device used by [ModeSurvey](https://modesurvey.org). This repo contains the information, source, and instructions for SurveyBox.
 
 #### Setup
 
@@ -14,7 +14,7 @@ After plugging the charged battery into the ESP32, and closing the box, follow t
 6. If the connection is successful, then the status change signal will display, and the device should be able to send data to the "events-test" table in firebase. If you do not have access to this table, then a flashing light on button press should be enough to validate that the device is sending data.
 7. Once you have verified that the device is connected and the buttons are still wired properly after closing the box, you can press the following sequence to enter production mode and send events to the real events table. The sequence is WALK, TRANSIT, WHEELS, CAR, WALK. The status change signal will flash, and you can know setup the device in the desired location in the store.
 
-This functionality is primary given by (AutoConnect)[https://github.com/Hieromon/AutoConnect], and more information can be found at the listed repo.
+This functionality is primary given by [AutoConnect](https://github.com/Hieromon/AutoConnect), and more information can be found at the listed repo.
 
 Enjoy!
 
