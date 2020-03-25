@@ -6,6 +6,7 @@
                 "/home/matgrioni/Arduino/libraries/ArduinoJson/src",
                 "/home/matgrioni/Arduino/libraries/PageBuilder/src",
                 "/home/matgrioni/Arduino/libraries/AutoConnect/src",
+                "/home/matgrioni/Arduino/libraries/Firebase_ESP32_Client/src",
                 "/home/matgrioni/.arduino15/packages/esp32/tools/**",
                 "/home/matgrioni/.arduino15/packages/esp32/hardware/esp32/1.0.4/**"
             ],
