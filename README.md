@@ -4,7 +4,9 @@ SurveyBox is the on-the-ground data collection device used by [ModeSurvey](https
 
 ### Supplies
 
-The main chip for the SurveyBox is an ESP32. The exact dev kit can be found at the following [amazon link](https://www.amazon.com/KeeYees-Development-Bluetooth-Microcontroller-ESP-WROOM-32/dp/B07QCP2451).
+The main chip for the SurveyBox is an ESP32. The exact dev kit can be found at the following [amazon link](https://www.amazon.com/KeeYees-Development-Bluetooth-Microcontroller-ESP-WROOM-32/dp/B07QCP2451). This devkit consists of the ESP-WROOM-32 on a nodemcu style board. The pinout diagrams can be found in the `docs` folder. The nicer looking one is reproduced below.
+
+<img src="docs/zernyth_pinout.jpg" alt="drawing" width="750"/>
 
 #### Setup
 
