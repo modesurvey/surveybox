@@ -39,50 +39,55 @@ namespace jwt
         ret += ".";
         ret += base64::encode_urlsafe(payload);
 
-        mbedtls_pk_context pk_context;
-        mbedtls_pk_init(&pk_context);
-        int rc = mbedtls_pk_parse_key(&pk_context, key, key_size, NULL, 0);
+        mbedtls_pk_context pk_context_raw;
+        std::unique_ptr<mbedtls_pk_context, decltype(&mbedtls_pk_free)> pk_context(&pk_context_raw, &mbedtls_pk_free);
+        mbedtls_pk_init(&pk_context_raw);
+        int rc = mbedtls_pk_parse_key(pk_context.get(), key, key_size, NULL, 0);
         if (rc != 0)
         {
-            //mbedtls_pk_free(&pk_context);
             throw std::runtime_error(mbedtls_error_to_msg(rc));
         }
 
         uint8_t digest[32];
-        const unsigned char* concated_ptr = reinterpret_cast<const unsigned char*>(ret.c_str());
-        rc = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), concated_ptr, ret.length(), digest);
+        rc = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256),
+                        reinterpret_cast<const unsigned char*>(ret.c_str()), ret.length(), digest);
         if (rc != 0)
         {
-            //mbedtls_pk_free(&pk_context);
             throw std::runtime_error(mbedtls_error_to_msg(rc));
         }
 
-        std::unique_ptr<uint8_t> o_buf(new uint8_t[300]); // TODO: What is the actual length.
-        mbedtls_entropy_context entropy;
-        mbedtls_ctr_drbg_context ctr_drbg;
-        mbedtls_ctr_drbg_init(&ctr_drbg);
-        mbedtls_entropy_init(&entropy);
+        uint8_t buf[256];
+        mbedtls_entropy_context entropy_raw;
+        mbedtls_ctr_drbg_context ctr_drbg_raw;
+        std::unique_ptr<mbedtls_entropy_context, decltype(&mbedtls_entropy_free)> entropy(&entropy_raw, &mbedtls_entropy_free);
+        std::unique_ptr<mbedtls_ctr_drbg_context, decltype(&mbedtls_ctr_drbg_free)> ctr_drbg(&ctr_drbg_raw, &mbedtls_ctr_drbg_free);
+        mbedtls_ctr_drbg_init(ctr_drbg.get());
+        mbedtls_entropy_init(entropy.get());
 
         const char* pers = "__ms_jwt_entropy";
         mbedtls_ctr_drbg_seed(
-            &ctr_drbg,
+            ctr_drbg.get(),
             mbedtls_entropy_func,
-            &entropy,
+            entropy.get(),
             reinterpret_cast<const unsigned char*>(pers),
             strlen(pers));
 
         size_t ret_size;
-        rc = mbedtls_pk_sign(&pk_context, MBEDTLS_MD_SHA256, digest, sizeof(digest), o_buf.get(), &ret_size, mbedtls_ctr_drbg_random, &ctr_drbg);
+        rc = mbedtls_pk_sign(pk_context.get(),
+                             MBEDTLS_MD_SHA256,
+                             digest,
+                             sizeof(digest),
+                             buf,
+                             &ret_size,
+                             mbedtls_ctr_drbg_random,
+                             ctr_drbg.get());
         if (rc != 0)
         {
-            //mbedtls_pk_free(&pk_context);
             throw std::runtime_error(mbedtls_error_to_msg(rc));
         }
 
         ret += ".";
-        ret += base64::encode_urlsafe(o_buf.get(), ret_size);
-
-        mbedtls_pk_free(&pk_context);
+        ret += base64::encode_urlsafe(buf, ret_size);
 
         return ret;
     }

@@ -46,11 +46,10 @@ namespace base64
 {
   std::string encode_urlsafe(const std::string& data)
   {
-      // TODO: What happens with utf8?
       return encode_urlsafe(reinterpret_cast<const uint8_t*>(data.c_str()), data.length());
   }
 
-  std::string encode_urlsafe(const uint8_t * data, size_t len)
+  std::string encode_urlsafe(const uint8_t* data, size_t len)
   {
     std::string ret;
     int i = 0;
