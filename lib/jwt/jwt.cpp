@@ -3,7 +3,6 @@
     https://github.com/nkolban/esp32-snippets/blob/master/cloud/GCP/JWT/main.cpp.
 */
 
-
 #include "jwt.hpp"
 
 #include <base64.hpp>
@@ -14,7 +13,6 @@
 #include <mbedtls/entropy.h>
 #include <mbedtls/ctr_drbg.h>
 #include <memory>
-#include <Arduino.h>
 
 namespace
 {
