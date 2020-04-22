@@ -1,7 +1,9 @@
 #include "firestore_client.hpp"
 #include "jwt.hpp"
 
+#include <iomanip>
 #include <cstring>
+#include <ctime>
 #include <sstream>
 
 #include <ArduinoJson.h>
@@ -30,6 +32,16 @@ namespace
         http_client.begin(endpoint.c_str());
         http_client.addHeader("Authorization", authorization_header.c_str());
     }
+
+    std::string epoch_to_rfc3339(std::time_t epoch)
+    {
+        std::tm tm = *std::gmtime(&epoch);
+
+        std::stringstream ss;
+        ss << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
+
+        return ss.str();
+    }
 }
 
 
@@ -43,8 +55,6 @@ bool firestore_client::update_auth_token()
     try
     {
         jwt = create_gc_1hr_jwt("RS256", "JWT", iss_, "https://www.googleapis.com/auth/datastore", "https://oauth2.googleapis.com/token", key_);
-        Serial.println("jwt");
-        Serial.println(jwt.c_str());
     }
     catch (const std::runtime_error& e)
     {
@@ -78,7 +88,7 @@ bool firestore_client::update_auth_token()
     }
 
     http_client_.end();
-    
+
     return true;
 }
 
@@ -123,8 +133,9 @@ bool firestore_client::add_new_event(const std::string& stream_id, const Event& 
     begin_auth_http_client(http_client_, cur_auth_token_, endpoint);
     http_client_.addHeader("Content-Type", "application/json");
 
+    std::string timestamp = epoch_to_rfc3339(event.timestamp);
     std::stringstream payload_ss;
-    payload_ss << "{\"fields\": {\"timestamp\":{\"stringValue\":\"" << event.timestamp << "\"}, ";
+    payload_ss << "{\"fields\": {\"timestamp\":{\"timestampValue\":\"" << timestamp << "\"}, ";
     payload_ss << "\"type\":{\"stringValue\":\"" << event.type << "\"}}}";
     std::string payload = payload_ss.str();
 
@@ -141,7 +152,6 @@ bool firestore_client::add_new_event(const std::string& stream_id, const Event& 
 
 std::map<std::string, std::pair<std::string, std::string>> firestore_client::get_stream_ids_and_names()
 {
-    Serial.println("Updating");
     update_auth_token_if_necessary();
 
     std::map<std::string, std::pair<std::string, std::string>> streams;

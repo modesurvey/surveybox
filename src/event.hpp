@@ -10,7 +10,7 @@ struct Event
     const std::string type;
     const time_t timestamp;
 
-    Event(const std::string& type, time_t timestamp);
+    Event(const std::string &type, time_t timestamp);
 };
 
 #endif
